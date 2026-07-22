@@ -5,9 +5,11 @@ const AuthContext = createContext();
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
+
   if (!context) {
     throw new Error('useAuth must be used within AuthProvider');
   }
+
   return context;
 };
 
@@ -16,21 +18,42 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize from localStorage
+  // Initialize from localStorage safely
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
+    try {
+      const storedToken = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
 
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      if (
+        storedToken &&
+        storedUser &&
+        storedUser !== 'undefined' &&
+        storedUser !== 'null'
+      ) {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+      } else {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setToken(null);
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Error reading localStorage:', error);
+
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+
+      setToken(null);
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }, []);
 
   const login = async (email, password) => {
     const response = await api.post('/auth/login', { email, password });
+
     const { token, user } = response.data;
 
     localStorage.setItem('token', token);
@@ -43,7 +66,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (name, email, password) => {
-    const response = await api.post('/auth/register', { name, email, password });
+    const response = await api.post('/auth/register', {
+      name,
+      email,
+      password,
+    });
+
     const { token, user } = response.data;
 
     localStorage.setItem('token', token);
@@ -58,6 +86,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+
     setToken(null);
     setUser(null);
   };
@@ -72,5 +101,11 @@ export const AuthProvider = ({ children }) => {
     logout,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
 };
+
+export default AuthContext;
